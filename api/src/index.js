@@ -3,6 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import taskController from './controllers/taskController.js';
 
 dotenv.config();
 
@@ -31,9 +32,11 @@ app.use((err, req, res, next) => {
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
+app.use('/api', taskController);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
 export default app;
+

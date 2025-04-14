@@ -37,11 +37,6 @@ This is a modern full-stack application boilerplate with the following features:
    npm run dev
    ```
 
-3. Create a `.env` file in the api directory with your environment variables:
-   ```
-   PORT=3000
-   NODE_ENV=development
-   ```
 
 ## Project Structure
 
@@ -64,17 +59,3 @@ This is a modern full-stack application boilerplate with the following features:
         └── config/        # Configuration files
 ```
 
-## Available Scripts
-
-### Frontend (app/)
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
-
-### Backend (api/)
-- `npm run dev` - Start development server
-- `npm run start` - Start production server
-- `npm run test` - Run tests
-- `npm run lint` - Run ESLint 
