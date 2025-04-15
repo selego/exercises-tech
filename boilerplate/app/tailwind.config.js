@@ -1,41 +1,123 @@
+import tailwindcssAnimate from 'tailwindcss-animate'
+
 /** @type {import('tailwindcss').Config} */
-module.exports = {
-  darkMode: ["class"],
-  content: ["./src/**/*.{js,jsx}"],
+export default {
+  darkMode: ['class'],
+  content: ['./src/**/*.{js,jsx}'],
   theme: {
+    container: {
+      center: true,
+      padding: '2rem',
+      screens: {
+        '2xl': '1400px'
+      }
+    },
     extend: {
       colors: {
-        primary: "#4D3269",
-        secondry: "#71499A",
+        'blue-background': '#23394a',
+        background: {
+          DEFAULT: '#273237',
+          secondary: '#f7f8fa'
+        },
+        light: {
+          border: '#e1e5e8',
+          background: {
+            DEFAULT: '#FFFFFF',
+            blue: '#ecf5fe'
+          },
+          primary: {
+            DEFAULT: '#027AF2',
+            500: '#027AF2',
+            400: '#3D99F4',
+            100: '#D5E9FC',
+            50: '#ECF5FE'
+          },
+          green: '#00b83d',
+          orange: '#ffb029',
+          red: '#f43c36',
+          color: '#60768b'
+        },
+        dark: {
+          border: '#435261'
+        },
+
+        border: '#435261',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'var(--primary)',
+          foreground: 'hsl(var(--primary-foreground))',
+          light: '#027af2'
+        },
+        secondary: {
+          DEFAULT: 'var(--secondary)',
+          foreground: 'var(--secondary-foreground)'
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))'
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'var(--muted-foreground)'
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          foreground: 'var(--accent-foreground)'
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))'
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))'
+        },
+        table: {
+          header: 'var(--table-header)',
+          border: 'var(--table-border)'
+        },
+        purple: {
+          DEFAULT: 'var(--purple)',
+          1: 'var(--purple-1)',
+          2: 'var(--purple-2)',
+          3: 'var(--purple-3)',
+          4: 'var(--purple-4)'
+        },
+
+        blue: {
+          DEFAULT: 'var(--blue)'
+        },
+
+        lightyellow: '#FFBF54',
+        lightblue: '#3E98F3',
+        lightgreen: '#43CA78',
+        lightred: '#FB6B69'
       },
-      fontFamily: {
-        poppins: " 'Poppins', sans-serif",
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)'
       },
       keyframes: {
-        "progress-indeterminate": {
-          "0%": { transform: "translateX(-100%)" },
-          "50%": { transform: "translateX(0%)" },
-          "100%": { transform: "translateX(100%)" },
+        'accordion-down': {
+          from: { height: 0 },
+          to: { height: 'var(--radix-accordion-content-height)' }
         },
-        jump: {
-          "15%": { "border-bottom-right-radius": "3px" },
-          "25%": { transform: "translateY(9px) rotate(22.5deg)" },
-          "50%": {
-            transform: "translateY(18px) scale(1, 0.9) rotate(45deg)",
-            "border-bottom-right-radius": "40px",
-          },
-          "75%": { transform: "translateY(9px) rotate(67.5deg)" },
-          "100%": { transform: "translateY(0) rotate(90deg)" },
-        },
-        shadow: {
-          "0%, 100%": { transform: "scale(1, 1)" },
-          "50%": { transform: "scale(1.2, 1)" },
-        },
+        'accordion-up': {
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to: { height: 0 }
+        }
       },
       animation: {
-        "progress-indeterminate": "progress-indeterminate 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up': 'accordion-up 0.2s ease-out'
       },
-    },
+      fontFamily: {
+        'space-grotesk': 'var(--font-space-grostesk)'
+      }
+    }
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
-};
+  plugins: [tailwindcssAnimate]
+}

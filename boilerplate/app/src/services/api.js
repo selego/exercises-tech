@@ -1,49 +1,140 @@
 import "isomorphic-fetch";
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+import { apiURL } from "../config";
 
-const handleResponse = async (response) => {
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Something went wrong');
+class api {
+  constructor() {
+    this.token = "";
   }
-  return response.json();
-};
 
-const api = {
-  get: async (endpoint) => {
-    const response = await fetch(`${API_URL}${endpoint}`);
-    return handleResponse(response);
-  },
+  getToken() {
+    return this.token;
+  }
 
-  post: async (endpoint, data) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
+  setToken(token) {
+    this.token = token;
+  }
+
+  get(path) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${apiURL}${path}`, {
+          mode: "cors",
+          method: "GET",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+        });
+
+        const res = await response.json();
+        resolve(res);
+      } catch (e) {
+        reject(e);
+      }
     });
-    return handleResponse(response);
-  },
+  }
 
-  put: async (endpoint, data) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
+  put(path, body) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${apiURL}${path}`, {
+          mode: "cors",
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        });
+
+        const res = await response.json();
+        resolve(res);
+      } catch (e) {
+        reject(e);
+      }
     });
-    return handleResponse(response);
-  },
+  }
 
-  delete: async (endpoint) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'DELETE',
+  postFormData(path, file) {
+    let formData = new FormData();
+    console.log("file", file);
+    formData.append(file.name, file, file.name);
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log(`${apiURL}${path}`);
+        const response = await fetch(`${apiURL}${path}`, {
+          mode: "cors",
+          method: "POST",
+          credentials: "include",
+          headers: {},
+          body: formData,
+        });
+        const res = await response.json();
+        console.log("e", res);
+        resolve(res);
+      } catch (e) {
+        console.log("e", e);
+        reject(e);
+      }
     });
-    return handleResponse(response);
-  },
-};
+  }
 
-export default api;
+  remove(path) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${apiURL}${path}`, {
+          mode: "cors",
+          credentials: "include",
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+        });
+        const res = await response.json();
+        resolve(res);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  post(path, body) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${apiURL}${path}`, {
+          mode: "cors",
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        });
+
+        const res = await response.json();
+        if (response.status !== 200) {
+          return reject(res);
+        }
+        resolve(res);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+  download(path, body) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${apiURL}${path}`, {
+          mode: "cors",
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        });
+
+        if (response.status !== 200) {
+          return reject(response);
+        }
+        resolve(response);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+}
+
+const API = new api();
+export default API;
