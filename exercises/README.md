@@ -4,7 +4,6 @@
 Now that you've completed the theoretical portion, it's time to test your understanding through practical application. These exercises will help solidify your knowledge and ensure you've grasped the key concepts.
 
 ## Getting Started
-The link to GitHub to get your exercises is [here](#).
 
 1. Fork the repository to your own account
 2. Work through all exercises independently
