@@ -13,3 +13,6 @@ This hands-on practice is essential to confirm your understanding of the materia
 
 ## Important
 **Please ensure you complete all exercises, as they will be reviewed before you can advance to the next section.**
+
+
+loom video URL : https://www.loom.com/share/4fe48ec79108460886f97583901f6a79?sid=07dbdfd0-ace1-42c3-a76f-1eeb940340e2
