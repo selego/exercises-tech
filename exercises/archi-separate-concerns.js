@@ -44,6 +44,14 @@ const SORT_OPTIONS = [
   { value: 'total', label: 'Sort by Total' }
 ];
 
+// Error codes
+const ERROR_CODES = {
+  FETCH_ORDERS_FAILED: 'FETCH_ORDERS_FAILED',
+  SEND_REMINDER_FAILED: 'SEND_REMINDER_FAILED',
+  MARK_SHIPPED_FAILED: 'MARK_SHIPPED_FAILED',
+  INVALID_ORDER_STATUS: 'INVALID_ORDER_STATUS'
+};
+
 // Utility functions
 function formatDate(date) {
   return new Date(date).toLocaleDateString();
@@ -159,6 +167,75 @@ function OrderTable({ orders, onReminder, onShip }) {
   );
 }
 
+// Error handling utility
+function handleError(error, code) {
+  console.error(`[${code}] ${error.message}`);
+  return { ok: false, code, error: error.message };
+}
+
+// Order Service Class
+class OrderService {
+  constructor(api) {
+    this.api = api;
+  }
+
+  async fetchOrders() {
+    try {
+      const { data, ok } = await this.api.fetchOrders();
+      if (!ok) throw new Error('Failed to fetch orders');
+      return { ok: true, data };
+    } catch (error) {
+      return handleError(error, ERROR_CODES.FETCH_ORDERS_FAILED);
+    }
+  }
+
+  async sendReminder(orderId) {
+    try {
+      const { ok } = await this.api.sendReminder(orderId);
+      if (!ok) throw new Error('Failed to send reminder');
+      return { ok: true };
+    } catch (error) {
+      return handleError(error, ERROR_CODES.SEND_REMINDER_FAILED);
+    }
+  }
+
+  async markAsShipped(orderId) {
+    try {
+      const { ok } = await this.api.markShipped(orderId);
+      if (!ok) throw new Error('Failed to mark order as shipped');
+      return { ok: true };
+    } catch (error) {
+      return handleError(error, ERROR_CODES.MARK_SHIPPED_FAILED);
+    }
+  }
+
+  calculateMetrics(orders) {
+    return orders.reduce((acc, order) => ({
+      totalOrders: acc.totalOrders + 1,
+      totalRevenue: acc.totalRevenue + order.total,
+      customerEmails: acc.customerEmails.add(order.customerEmail)
+    }), {
+      totalOrders: 0,
+      totalRevenue: 0,
+      customerEmails: new Set()
+    });
+  }
+
+  filterOrders(orders, filter) {
+    return orders.filter(order => filter === 'all' || order.status === filter);
+  }
+
+  sortOrders(orders, sortBy) {
+    return [...orders].sort((a, b) => {
+      if (sortBy === 'date') return new Date(b.date) - new Date(a.date);
+      return b.total - a.total;
+    });
+  }
+}
+
+// Initialize service
+const orderService = new OrderService(api);
+
 function OrdersDashboard() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -166,36 +243,10 @@ function OrdersDashboard() {
   const [filter, setFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date');
 
-  // Data processing functions
-  function filterByStatus(order) {
-    return filter === 'all' || order.status === filter;
-  }
-
-  function compareOrders(a, b) {
-    if (sortBy === 'date') {
-      return new Date(b.date) - new Date(a.date);
-    }
-    return b.total - a.total;
-  }
-
-  function calculateMetrics(ordersList) {
-    return ordersList.reduce(function(acc, order) {
-      return {
-        totalOrders: acc.totalOrders + 1,
-        totalRevenue: acc.totalRevenue + order.total,
-        customerEmails: acc.customerEmails.add(order.customerEmail)
-      };
-    }, {
-      totalOrders: 0,
-      totalRevenue: 0,
-      customerEmails: new Set()
-    });
-  }
-
   // Processed data
-  const filteredOrders = orders.filter(filterByStatus);
-  const sortedOrders = filteredOrders.sort(compareOrders);
-  const metrics = calculateMetrics(orders);
+  const filteredOrders = orderService.filterOrders(orders, filter);
+  const sortedOrders = orderService.sortOrders(filteredOrders, sortBy);
+  const metrics = orderService.calculateMetrics(orders);
   
   const dashboardMetrics = {
     totalOrders: metrics.totalOrders,
@@ -204,66 +255,50 @@ function OrdersDashboard() {
   };
 
   // Event handlers
-  function handleFetchSuccess(data) {
-    setOrders(data);
-    setLoading(false);
+  async function handleFetchOrders() {
+    try {
+      setLoading(true);
+      setError(null);
+      const { ok, data, code, error } = await orderService.fetchOrders();
+      if (!ok) {
+        setError({ code, message: error });
+        return;
+      }
+      setOrders(data);
+    } catch (err) {
+      setError({ code: ERROR_CODES.FETCH_ORDERS_FAILED, message: err.message });
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleFetchError(err) {
-    setError(err.message);
-    setLoading(false);
-  }
-
-  function handleFetchOrders() {
-    setLoading(true);
-    setError(null);
-    api.fetchOrders()
-      .then(handleFetchSuccess)
-      .catch(handleFetchError);
-  }
-
-  function handleReminderSuccess() {
+  async function handleSendReminder(id) {
+    const { ok, code, error } = await orderService.sendReminder(id);
+    if (!ok) {
+      alert(`Failed to send reminder: ${error}`);
+      return;
+    }
     alert('Reminder sent');
   }
 
-  function handleReminderError(err) {
-    alert(`Failed to send reminder: ${err.message}`);
-  }
-
-  function handleSendReminder(id) {
-    api.sendReminder(id)
-      .then(handleReminderSuccess)
-      .catch(handleReminderError);
-  }
-
-  function updateOrderStatus(prevOrders, id) {
-    return prevOrders.map(function(order) {
-      if (order.id === id) {
-        return { ...order, status: 'shipped' };
-      }
-      return order;
-    });
-  }
-
-  function handleShipSuccess(id) {
-    setOrders(function(prevOrders) {
-      return updateOrderStatus(prevOrders, id);
-    });
+  async function handleShipOrder(id) {
+    const { ok, code, error } = await orderService.markAsShipped(id);
+    if (!ok) {
+      alert(`Failed to mark order as shipped: ${error}`);
+      return;
+    }
+    setOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.id === id ? { ...order, status: 'shipped' } : order
+      )
+    );
     alert('Order marked as shipped');
   }
 
-  function handleShipError(err) {
-    alert(`Failed to mark order as shipped: ${err.message}`);
-  }
-
-  function handleShipOrder(id) {
-    api.markShipped(id)
-      .then(function() { handleShipSuccess(id); })
-      .catch(handleShipError);
-  }
-
   // Effects
-  useEffect(handleFetchOrders, []);
+  useEffect(() => {
+    handleFetchOrders();
+  }, []);
 
   // Render loading state
   if (loading) {
@@ -278,7 +313,8 @@ function OrdersDashboard() {
   if (error) {
     return (
       <div className="bg-red-100 text-red-700 p-4 rounded-lg">
-        Error: {error}
+        <p className="font-semibold">Error: {error.code}</p>
+        <p>{error.message}</p>
       </div>
     );
   }
