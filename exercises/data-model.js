@@ -32,36 +32,24 @@ const taskSchema = new mongoose.Schema({
   },
   dueDate: Date,
 
-  // User references with essential data
+  // User references
   createdBy: {
-    _id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    name: String,
-    avatar: String
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
   assignedTo: {
-    _id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    name: String,
-    avatar: String
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
 
-  // Comments with user references
+  // Comments
   comments: [{
     text: String,
     user: {
-      _id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-      },
-      name: String,
-      avatar: String
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
     },
     createdAt: {
       type: Date,
@@ -69,7 +57,7 @@ const taskSchema = new mongoose.Schema({
     }
   }],
 
-  // Basic metadata
+  // Metadata
   createdAt: {
     type: Date,
     default: Date.now
@@ -78,6 +66,12 @@ const taskSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+});
+
+// Update timestamp on save
+taskSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
 });
 
 const Task = mongoose.model('Task', taskSchema);
@@ -115,17 +109,14 @@ router.post('/', async (req, res) => {
       status,
       priority,
       dueDate,
-      createdBy: {
-        _id: user._id,
-        name: user.name,
-        avatar: user.avatar
-      }
+      createdBy: user._id
     });
     
     await task.save();
     res.status(201).json({ ok: true, data: task });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'Failed to create task' });
   }
 });
 
@@ -157,17 +148,13 @@ router.post('/:id/assign', async (req, res) => {
       });
     }
     
-    task.assignedTo = {
-      _id: user._id,
-      name: user.name,
-      avatar: user.avatar
-    };
-    task.updatedAt = new Date();
-    
+    task.assignedTo = user._id;
     await task.save();
+    
     res.status(200).json({ ok: true, data: task });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'Failed to assign task' });
   }
 });
 
@@ -201,21 +188,16 @@ router.post('/:id/comments', async (req, res) => {
     
     const comment = {
       text,
-      user: {
-        _id: user._id,
-        name: user.name,
-        avatar: user.avatar
-      },
-      createdAt: new Date()
+      user: user._id
     };
     
     task.comments.push(comment);
-    task.updatedAt = new Date();
-    
     await task.save();
+    
     res.status(201).json({ ok: true, data: comment });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'Failed to add comment' });
   }
 });
 
