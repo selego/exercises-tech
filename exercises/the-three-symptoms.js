@@ -21,230 +21,391 @@
 // 3. Decoupling functionality to reduce change amplification
 // 4. Applying proper separation of concerns
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 
-const ProductSearch = ({ 
-  initialQuery = '', 
-  showRatings = true, 
-  allowFiltering = true, 
-  sortOptions = ['relevance', 'price-low', 'price-high'],
-  saveSearchState = true
-}) => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+// Simple error codes
+const ERRORS = {
+  SERVER: 'SERVER_ERROR',
+  NETWORK: 'NETWORK_ERROR'
+};
+
+// Simple API client
+const api = {
+  async search(params) {
+    try {
+      const query = new URLSearchParams(params).toString();
+      const response = await fetch(`/api/products/search?${query}`);
+      const data = await response.json();
+      return { data: data.products || [], ok: true };
+    } catch (error) {
+      return { ok: false, error: ERRORS.SERVER };
+    }
+  }
+};
+
+// Custom hook for search state
+const useSearch = (initialQuery = '') => {
   const [query, setQuery] = useState(initialQuery);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('relevance');
+  
+  return {
+    query,
+    setQuery,
+    page,
+    setPage,
+    sortBy,
+    setSortBy
+  };
+};
+
+// Custom hook for filter state
+const useFilters = () => {
   const [filters, setFilters] = useState({
     category: '',
     minPrice: '',
     maxPrice: '',
     inStock: false
   });
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState('relevance');
-  
-  // Complex fetch function with unknown unknowns (no proper error handling)
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    
-    const params = new URLSearchParams();
-    params.append('q', query);
-    params.append('page', page);
-    params.append('sort', sortBy);
-    
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== '' && value !== false) params.append(key, value);
-    });
-    
-    try {
-      const response = await fetch(`/api/products/search?${params.toString()}`);
-      const data = await response.json();
-      setProducts(data.products || []);
-    } catch (err) {
-      console.error('Search error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [query, page, sortBy, filters]);
-  
-  // High cognitive load with complex memoization
-  const categorizedProducts = useMemo(() => {
-    return products.reduce((acc, product) => {
-      if (!acc[product.category]) {
-        acc[product.category] = [];
-      }
-      acc[product.category].push(product);
-      return acc;
-    }, {});
-  }, [products]);
-  
-  // Effect with change amplification risk
-  useEffect(() => {
-    if (query.length > 0) {
-      fetchProducts();
-    }
-  }, [fetchProducts, query]);
-  
-  // Local storage effect causing change amplification
-  useEffect(() => {
-    if (saveSearchState) {
-      localStorage.setItem('lastSearchQuery', query);
-      localStorage.setItem('lastSearchFilters', JSON.stringify(filters));
-    }
-    return () => {
-      if (saveSearchState) {
-        localStorage.removeItem('lastSearchQuery');
-        localStorage.removeItem('lastSearchFilters');
-      }
-    };
-  }, [query, filters, saveSearchState]);
 
-  // Complex handler with conditional logic
   const handleFilterChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFilters(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-    setPage(1); // Reset page when filters change
   };
+
+  return { filters, handleFilterChange };
+};
+
+// Custom hook for product fetching
+const useProducts = (query, page, sortBy, filters) => {
+  const [state, setState] = useState({
+    products: [],
+    loading: false,
+    error: null
+  });
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (!query) return;
+
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      
+      const { data, ok, error } = await api.search({
+        q: query,
+        page,
+        sort: sortBy,
+        ...filters
+      });
+
+      setState({
+        products: ok ? data : [],
+        loading: false,
+        error: ok ? null : error
+      });
+    };
+
+    fetchProducts();
+  }, [query, page, sortBy, filters]);
+
+  return state;
+};
+
+// Simple search input component
+const SearchInput = ({ value, onChange }) => (
+  <input 
+    type="text" 
+    value={value} 
+    onChange={e => onChange(e.target.value)} 
+    placeholder="Search products..." 
+    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+  />
+);
+
+// Simple sort selector component
+const SortSelector = ({ value, onChange, options }) => (
+  <select 
+    value={value}
+    onChange={e => onChange(e.target.value)}
+    className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+  >
+    {options.map(option => (
+      <option key={option} value={option}>
+        {option === 'relevance' ? 'Relevance' : 
+         option === 'price-low' ? 'Price: Low to High' : 
+         'Price: High to Low'}
+      </option>
+    ))}
+  </select>
+);
+
+// Simple pagination component
+const Pagination = ({ page, onPageChange }) => (
+  <div className="flex justify-center mt-8">
+    <button 
+      onClick={() => onPageChange(Math.max(1, page - 1))}
+      disabled={page === 1}
+      className="px-4 py-2 mx-1 bg-gray-200 text-gray-700 rounded-md disabled:opacity-50"
+    >
+      Previous
+    </button>
+    <span className="px-4 py-2 mx-1 bg-gray-100 text-gray-700 rounded-md">
+      Page {page}
+    </span>
+    <button 
+      onClick={() => onPageChange(page + 1)}
+      className="px-4 py-2 mx-1 bg-gray-200 text-gray-700 rounded-md"
+    >
+      Next
+    </button>
+  </div>
+);
+
+// Rating stars component
+const RatingStars = ({ rating }) => (
+  <div className="flex mb-2">
+    {[1, 2, 3, 4, 5].map(star => (
+      <span 
+        key={star} 
+        className={`text-xl ${star <= rating ? 'text-yellow-400' : 'text-gray-200'}`}
+      >
+        ★
+      </span>
+    ))}
+  </div>
+);
+
+// Product image component
+const ProductImage = ({ src, alt }) => (
+  <img 
+    src={src} 
+    alt={alt} 
+    className="w-full h-48 object-cover"
+  />
+);
+
+// Product details component
+const ProductDetails = ({ name, price }) => (
+  <>
+    <h3 className="text-lg font-semibold mb-2 text-gray-800">
+      {name}
+    </h3>
+    <p className="text-gray-600 mb-2">
+      ${price.toFixed(2)}
+    </p>
+  </>
+);
+
+// Add to cart button component
+const AddToCartButton = () => (
+  <button 
+    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md w-full transition-colors"
+    onClick={() => console.log('Add to cart clicked')}
+  >
+    Add to Cart
+  </button>
+);
+
+// Simplified product card
+const ProductCard = ({ product, showRatings }) => (
+  <div className="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow">
+    <ProductImage src={product.image} alt={product.name} />
+    <div className="p-4">
+      <ProductDetails name={product.name} price={product.price} />
+      {showRatings && <RatingStars rating={product.rating} />}
+      <AddToCartButton />
+    </div>
+  </div>
+);
+
+// Category selector component
+const CategorySelector = ({ value, onChange }) => (
+  <select 
+    name="category"
+    value={value}
+    onChange={onChange}
+    className="px-4 py-2 border border-gray-300 rounded-md"
+  >
+    <option value="">All Categories</option>
+    <option value="electronics">Electronics</option>
+    <option value="clothing">Clothing</option>
+    <option value="home">Home & Garden</option>
+  </select>
+);
+
+// Price range inputs component
+const PriceRangeInputs = ({ minPrice, maxPrice, onChange }) => (
+  <>
+    <input 
+      type="number"
+      name="minPrice"
+      value={minPrice}
+      onChange={onChange}
+      placeholder="Min Price"
+      className="px-4 py-2 border border-gray-300 rounded-md"
+    />
+    <input 
+      type="number"
+      name="maxPrice"
+      value={maxPrice}
+      onChange={onChange}
+      placeholder="Max Price"
+      className="px-4 py-2 border border-gray-300 rounded-md"
+    />
+  </>
+);
+
+// Stock filter component
+const StockFilter = ({ checked, onChange }) => (
+  <label className="flex items-center cursor-pointer">
+    <input 
+      type="checkbox"
+      name="inStock"
+      checked={checked}
+      onChange={onChange}
+      className="mr-2"
+    />
+    <span className="text-gray-700">In Stock Only</span>
+  </label>
+);
+
+// Simplified filters section
+const ProductFilters = ({ filters, onFilterChange }) => (
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <CategorySelector 
+      value={filters.category}
+      onChange={onFilterChange}
+    />
+    <PriceRangeInputs 
+      minPrice={filters.minPrice}
+      maxPrice={filters.maxPrice}
+      onChange={onFilterChange}
+    />
+    <StockFilter 
+      checked={filters.inStock}
+      onChange={onFilterChange}
+    />
+  </div>
+);
+
+// Loading spinner component
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center h-40">
+    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500" />
+  </div>
+);
+
+// Error message component
+const ErrorMessage = ({ message }) => (
+  <div className="text-red-500 text-center py-4">
+    {message}
+  </div>
+);
+
+// Search header section
+const SearchHeader = ({ 
+  query, 
+  onQueryChange, 
+  sortBy, 
+  onSortChange,
+  sortOptions,
+  filters,
+  onFilterChange,
+  allowFiltering 
+}) => (
+  <>
+    <div className="mb-6">
+      <SearchInput 
+        value={query}
+        onChange={onQueryChange}
+      />
+    </div>
+
+    {allowFiltering && (
+      <ProductFilters 
+        filters={filters}
+        onFilterChange={onFilterChange}
+      />
+    )}
+
+    <div className="mb-6">
+      <SortSelector 
+        value={sortBy}
+        onChange={onSortChange}
+        options={sortOptions}
+      />
+    </div>
+  </>
+);
+
+// Product grid component
+const ProductGrid = ({ products, showRatings }) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+    {products.map(product => (
+      <ProductCard 
+        key={product.id}
+        product={product}
+        showRatings={showRatings}
+      />
+    ))}
+  </div>
+);
+
+// Main content area
+const MainContent = ({ loading, error, products, showRatings }) => {
+  if (error) {
+    return <ErrorMessage message={error} />;
+  }
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  return <ProductGrid products={products} showRatings={showRatings} />;
+};
+
+// Main ProductSearch component - now much simpler
+const ProductSearch = ({ 
+  initialQuery = '', 
+  showRatings = true, 
+  allowFiltering = true, 
+  sortOptions = ['relevance', 'price-low', 'price-high']
+}) => {
+  const search = useSearch(initialQuery);
+  const { filters, handleFilterChange } = useFilters();
+  const { products, loading, error } = useProducts(
+    search.query,
+    search.page,
+    search.sortBy,
+    filters
+  );
 
   return (
     <div className="container mx-auto p-4">
-      <div className="mb-6">
-        <input 
-          type="text" 
-          value={query} 
-          onChange={e => setQuery(e.target.value)} 
-          placeholder="Search products..." 
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-      
-      {allowFiltering && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <select 
-            name="category"
-            value={filters.category}
-            onChange={handleFilterChange}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Categories</option>
-            <option value="electronics">Electronics</option>
-            <option value="clothing">Clothing</option>
-            <option value="home">Home & Garden</option>
-          </select>
-          
-          <input 
-            type="number" 
-            name="minPrice"
-            value={filters.minPrice}
-            onChange={handleFilterChange}
-            placeholder="Min Price" 
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          
-          <input 
-            type="number" 
-            name="maxPrice"
-            value={filters.maxPrice}
-            onChange={handleFilterChange}
-            placeholder="Max Price" 
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          
-          <div className="flex items-center">
-            <input 
-              type="checkbox" 
-              id="inStock"
-              name="inStock"
-              checked={filters.inStock}
-              onChange={handleFilterChange}
-              className="mr-2 h-5 w-5 text-blue-600" 
-            />
-            <label htmlFor="inStock" className="text-gray-700">In Stock Only</label>
-          </div>
-        </div>
-      )}
-      
-      <div className="mb-6">
-        <select 
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {sortOptions.map(option => (
-            <option key={option} value={option}>
-              {option === 'relevance' ? 'Relevance' : 
-               option === 'price-low' ? 'Price: Low to High' : 
-               option === 'price-high' ? 'Price: High to Low' : option}
-            </option>
-          ))}
-        </select>
-      </div>
-      
-      {loading ? (
-        <div className="flex justify-center items-center h-40">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : error ? (
-        <div className="text-red-500 text-center py-4">{error}</div>
-      ) : (
-        <div>
-          {Object.entries(categorizedProducts).map(([category, categoryProducts]) => (
-            <div key={category} className="mb-8">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">{category}</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {categoryProducts.map(product => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow">
-                    <img src={product.image} alt={product.name} className="w-full h-48 object-cover" />
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold mb-2 text-gray-800">{product.name}</h3>
-                      <p className="text-gray-600 mb-2">${product.price.toFixed(2)}</p>
-                      {showRatings && (
-                        <div className="flex mb-2">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <svg 
-                              key={i} 
-                              className={`w-5 h-5 ${i < product.rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                              fill="currentColor" 
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          ))}
-                        </div>
-                      )}
-                      <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md w-full transition-colors">
-                        Add to Cart
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      
-      <div className="flex justify-center mt-8">
-        <button 
-          onClick={() => setPage(p => Math.max(1, p - 1))}
-          disabled={page === 1}
-          className="px-4 py-2 mx-1 bg-gray-200 text-gray-700 rounded-md disabled:opacity-50"
-        >
-          Previous
-        </button>
-        <span className="px-4 py-2 mx-1 bg-gray-100 text-gray-700 rounded-md">
-          Page {page}
-        </span>
-        <button 
-          onClick={() => setPage(p => p + 1)}
-          className="px-4 py-2 mx-1 bg-gray-200 text-gray-700 rounded-md"
-        >
-          Next
-        </button>
-      </div>
+      <SearchHeader 
+        query={search.query}
+        onQueryChange={search.setQuery}
+        sortBy={search.sortBy}
+        onSortChange={search.setSortBy}
+        sortOptions={sortOptions}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        allowFiltering={allowFiltering}
+      />
+
+      <MainContent 
+        loading={loading}
+        error={error}
+        products={products}
+        showRatings={showRatings}
+      />
+
+      <Pagination 
+        page={search.page}
+        onPageChange={search.setPage}
+      />
     </div>
   );
 };

@@ -12,27 +12,39 @@
 // 3. Create a clean, reusable service structure
 // 4. Implement consistent error handling
 
-// src/services/userService.js
+// src/services/apiService.js
 import { setToken, removeToken } from '../utils/auth';
 
-// General API service mixed with specific authentication logic
-const api = {
-  baseUrl: '/api',
-  
-  // Makes a GET request to the API
+// Error codes for consistent error handling
+const ERROR_CODES = {
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  BAD_REQUEST: 'BAD_REQUEST',
+  SERVER_ERROR: 'SERVER_ERROR',
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  USER_NOT_FOUND: 'USER_NOT_FOUND'
+};
+
+// Base API service class for handling HTTP requests
+class ApiService {
+  constructor(baseUrl = '/api') {
+    this.baseUrl = baseUrl;
+  }
+
   async get(endpoint) {
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`);
       const data = await response.json();
-      return data;
+      
+      if (!response.ok) {
+        return { ok: false, code: this._getErrorCode(response.status), data };
+      }
+      
+      return { ok: true, data };
     } catch (error) {
-      console.error('API GET error:', error);
-      alert('Failed to fetch data. Please try again.'); // UI logic in service layer
-      return null;
+      return { ok: false, code: ERROR_CODES.SERVER_ERROR, error: error.message };
     }
-  },
-  
-  // Makes a POST request to the API
+  }
+
   async post(endpoint, body) {
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -46,17 +58,15 @@ const api = {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || 'Something went wrong');
+        return { ok: false, code: this._getErrorCode(response.status), data };
       }
       
-      return data;
+      return { ok: true, data };
     } catch (error) {
-      console.error('API POST error:', error);
-      return { error: error.message };
+      return { ok: false, code: ERROR_CODES.SERVER_ERROR, error: error.message };
     }
-  },
-  
-  // Makes a PUT request to the API
+  }
+
   async put(endpoint, body) {
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -70,113 +80,84 @@ const api = {
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('API error:', data.message);
-        return { ok: false, data };
+        return { ok: false, code: this._getErrorCode(response.status), data };
       }
       
       return { ok: true, data };
     } catch (error) {
-      console.error('API PUT error:', error);
-      return { ok: false, error: error.message };
+      return { ok: false, code: ERROR_CODES.SERVER_ERROR, error: error.message };
     }
   }
-};
 
-// User login - business logic mixed with authentication
-export const login = async (email, password) => {
-  try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
-    });
-    
-    const data = await response.json();
+  _getErrorCode(status) {
+    switch (status) {
+      case 400:
+        return ERROR_CODES.BAD_REQUEST;
+      case 401:
+        return ERROR_CODES.UNAUTHORIZED;
+      case 404:
+        return ERROR_CODES.USER_NOT_FOUND;
+      default:
+        return ERROR_CODES.SERVER_ERROR;
+    }
+  }
+}
+
+// User service for handling user-specific operations
+class UserService {
+  constructor(apiService) {
+    this.api = apiService;
+  }
+
+  async login(email, password) {
+    const response = await this.api.post('/auth/login', { email, password });
     
     if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
+      return response;
     }
     
-    // Store token in localStorage
-    setToken(data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    setToken(response.data.token);
+    localStorage.setItem('user', JSON.stringify(response.data.user));
     
-    // UI-related logic in service
-    if (data.user.isAdmin) {
-      window.location.href = '/admin/dashboard';
-    } else {
-      window.location.href = '/dashboard';
+    return { ok: true, data: response.data.user };
+  }
+
+  async register(userData) {
+    const response = await this.api.post('/auth/register', userData);
+    
+    if (!response.ok) {
+      return response;
     }
     
-    return { success: true, user: data.user };
-  } catch (error) {
-    // UI alert in service method
-    alert(`Login failed: ${error.message}`);
-    return { success: false, error: error.message };
+    return this.login(userData.email, userData.password);
   }
-};
 
-// User register
-export const register = async (userData) => {
-  const response = await api.post('/auth/register', userData);
-  
-  if (response.error) {
-    alert(`Registration failed: ${response.error}`); // UI logic
-    return { success: false, error: response.error };
+  async getUserProfile() {
+    return this.api.get('/user/profile');
   }
-  
-  // Automatically log the user in
-  return await login(userData.email, userData.password);
-};
 
-// Get user profile
-export const getUserProfile = async () => {
-  const data = await api.get('/user/profile');
-  
-  if (!data) {
-    return null;
-  }
-  
-  return data;
-};
-
-// Update user profile
-export const updateUserProfile = async (profileData) => {
-  const result = await api.put('/user/profile', profileData);
-  
-  if (result.ok) {
-    // UI alert in service
-    alert('Profile updated successfully!');
+  async updateUserProfile(profileData) {
+    const response = await this.api.put('/user/profile', profileData);
     
-    // Update stored user data
-    const currentUser = JSON.parse(localStorage.getItem('user'));
-    localStorage.setItem('user', JSON.stringify({
-      ...currentUser,
-      ...profileData
-    }));
+    if (response.ok) {
+      const currentUser = JSON.parse(localStorage.getItem('user'));
+      localStorage.setItem('user', JSON.stringify({
+        ...currentUser,
+        ...profileData
+      }));
+    }
     
-    return { success: true, user: result.data };
-  } else {
-    alert(`Failed to update profile: ${result.error}`);
-    return { success: false, error: result.error };
+    return response;
   }
-};
 
-// Logout user
-export const logout = () => {
-  removeToken();
-  localStorage.removeItem('user');
-  
-  // UI/routing logic in service
-  window.location.href = '/login';
-};
+  logout() {
+    removeToken();
+    localStorage.removeItem('user');
+  }
+}
 
-export default {
-  login,
-  register,
-  getUserProfile,
-  updateUserProfile,
-  logout
-};
+// Initialize services
+const apiService = new ApiService();
+const userService = new UserService(apiService);
+
+export { apiService, userService, ERROR_CODES };

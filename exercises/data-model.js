@@ -14,39 +14,64 @@
 const mongoose = require('mongoose');
 
 const taskSchema = new mongoose.Schema({
-  title: String,
+  // Core task data
+  title: {
+    type: String,
+    required: true
+  },
   description: String,
   status: {
     type: String,
     enum: ['todo', 'in_progress', 'review', 'done'],
     default: 'todo'
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  assignedTo: {
-    user_id: String,
-    name: String,
-    email: String,
-    avatar: String
-  },
-  comments: [{
-    text: String,
-    createdAt: { type: Date, default: Date.now },
-    user_id: String,
-    user_name: String,
-    user_avatar: String
-  }],
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],
     default: 'medium'
   },
   dueDate: Date,
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+
+  // User references
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+
+  // Comments
+  comments: [{
+    text: String,
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
+  // Metadata
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Update timestamp on save
+taskSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
 });
 
 const Task = mongoose.model('Task', taskSchema);
@@ -63,9 +88,19 @@ router.post('/', async (req, res) => {
   try {
     const { title, description, status, user_id, priority, dueDate } = req.body;
     
+    if (!title || !user_id) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Title and user_id are required' 
+      });
+    }
+    
     const user = await User.findById(user_id);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ 
+        ok: false, 
+        error: 'User not found' 
+      });
     }
     
     const task = new Task({
@@ -74,18 +109,14 @@ router.post('/', async (req, res) => {
       status,
       priority,
       dueDate,
-      createdBy: {
-        user_id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar
-      }
+      createdBy: user._id
     });
     
     await task.save();
-    res.status(201).json(task);
+    res.status(201).json({ ok: true, data: task });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create task' });
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'Failed to create task' });
   }
 });
 
@@ -94,28 +125,36 @@ router.post('/:id/assign', async (req, res) => {
   try {
     const { user_id } = req.body;
     
+    if (!user_id) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'user_id is required' 
+      });
+    }
+    
     const task = await Task.findById(req.params.id);
     if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+      return res.status(404).json({ 
+        ok: false, 
+        error: 'Task not found' 
+      });
     }
     
     const user = await User.findById(user_id);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ 
+        ok: false, 
+        error: 'User not found' 
+      });
     }
     
-    task.assignedTo = {
-      user_id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar
-    };
-    task.updatedAt = Date.now();
-    
+    task.assignedTo = user._id;
     await task.save();
-    res.status(200).json(task);
+    
+    res.status(200).json({ ok: true, data: task });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to assign task' });
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'Failed to assign task' });
   }
 });
 
@@ -124,31 +163,41 @@ router.post('/:id/comments', async (req, res) => {
   try {
     const { text, user_id } = req.body;
     
+    if (!text || !user_id) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Text and user_id are required' 
+      });
+    }
+    
     const task = await Task.findById(req.params.id);
     if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+      return res.status(404).json({ 
+        ok: false, 
+        error: 'Task not found' 
+      });
     }
     
     const user = await User.findById(user_id);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ 
+        ok: false, 
+        error: 'User not found' 
+      });
     }
     
     const comment = {
       text,
-      user_id: user._id,
-      user_name: user.name,
-      user_avatar: user.avatar,
-      createdAt: Date.now()
+      user: user._id
     };
     
     task.comments.push(comment);
-    task.updatedAt = Date.now();
-    
     await task.save();
-    res.status(201).json(comment);
+    
+    res.status(201).json({ ok: true, data: comment });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add comment' });
+    console.error(error);
+    res.status(500).json({ ok: false, error: 'Failed to add comment' });
   }
 });
 
