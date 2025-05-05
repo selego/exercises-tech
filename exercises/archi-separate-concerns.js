@@ -32,14 +32,14 @@ const OrderStatus = ({ status }) => {
 }
 
 
-const tableResponse = ({orders, loading, error}) => {
+const TableResponse = ({orders, loading, error, updateOrders}) => {
   // Send reminder email
   const sendReminderEmail = async (orderId) => {
     try {
       const {ok, data} = await api.post(`/api/orders/${orderId}/send-reminder`);
 
       if (!ok) {
-        return toast.error("Failed to send reminder");
+        return toast.error(data.message || "Failed to send reminder");
       }
 
       alert("Reminder email sent successfully");
@@ -51,12 +51,13 @@ const tableResponse = ({orders, loading, error}) => {
   // Mark order as shipped
   const markAsShipped = async (orderId) => {
     try {
-      const { ok, data } = await api.post(`/api/orders/${orderId}`, { status: "shipped" });
+      const { ok, data } = await api.put(`/api/orders/${orderId}`, { status: "shipped" });
     
       if (!ok) {
-        return toast.error("Failed to update order");
+        return toast.error(data.message || "Failed to update order");
       }
-
+      
+      updateOrders(data);
       alert("Order marked as shipped");
     } catch (err) {
       alert(`Error: ${err.message}`);
@@ -206,6 +207,10 @@ const OrdersDashboard = () => {
     return 0;
   });
 
+  const updateOrders = (newOrders) => {
+    setOrders(newOrders);
+  };
+
     return (
       <div className="container mx-auto p-4">
         <h1 className="text-2xl font-bold mb-6">Orders Dashboard</h1>
@@ -239,11 +244,13 @@ const OrdersDashboard = () => {
           </select>
         </div>
         
-        <tableResponse 
+        <TableResponse 
           orders={sortedOrders} 
           loading={loading} 
           error={error} 
+          updateOrders={updateOrders}
         />
+        
       </div>
     );
 
