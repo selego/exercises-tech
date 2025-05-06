@@ -22,9 +22,8 @@ const taskSchema = new mongoose.Schema({
     default: 'todo'
   },
   createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    user_id: String,
+    user_name : String,
   },
   assignedTo: {
     user_id: String,
@@ -61,95 +60,66 @@ const User = require('../models/user');
 // Create a new task
 router.post('/', async (req, res) => {
   try {
-    const { title, description, status, user_id, priority, dueDate } = req.body;
+
+    const { user_id } = req.body;
     
     const user = await User.findById(user_id);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'USER_NOT_FOUND' });
     }
     
     const task = new Task({
-      title,
-      description,
-      status,
-      priority,
-      dueDate,
+      ...req.body,
       createdBy: {
         user_id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar
+        user_name: user.name,
       }
     });
     
     await task.save();
-    res.status(201).json(task);
+    return res.status(201).json({ ok: true, data: task });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create task' });
+    return res.status(500).json({ error: 'FAILED_TO_CREATE_TASK' });
   }
 });
 
-// Assign task to user
-router.post('/:id/assign', async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const { user_id } = req.body;
     
     const task = await Task.findById(req.params.id);
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+    if (!task) return res.status(404).json({ error: 'TASK_NOT_FOUND' });
+
+    if (user_id) {
+      const user = await User.findById(user_id);
+      if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+      task.assignedTo = {
+        user_id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar
+      };
     }
-    
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+
+    if (text) {
+      const user = await User.findById(user_id); 
+      if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+      task.comments.push({
+        text,
+        user_id: user._id,
+        user_name: user.name,
+        user_avatar: user.avatar,
+      });
     }
-    
-    task.assignedTo = {
-      user_id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar
-    };
-    task.updatedAt = Date.now();
-    
+
     await task.save();
-    res.status(200).json(task);
+    return res.status(200).json({ ok: true, data: task });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to assign task' });
+    capture(error);
+    res.status(500).json({ error: 'FAILED_TO_UPDATE_TASK' });
   }
 });
 
-// Add a comment to a task
-router.post('/:id/comments', async (req, res) => {
-  try {
-    const { text, user_id } = req.body;
-    
-    const task = await Task.findById(req.params.id);
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-    
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    const comment = {
-      text,
-      user_id: user._id,
-      user_name: user.name,
-      user_avatar: user.avatar,
-      createdAt: Date.now()
-    };
-    
-    task.comments.push(comment);
-    task.updatedAt = Date.now();
-    
-    await task.save();
-    res.status(201).json(comment);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to add comment' });
-  }
-});
 
 module.exports = router;

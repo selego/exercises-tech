@@ -13,155 +13,126 @@
 // 4. Implement consistent error handling
 
 // src/services/userService.js
-import { setToken, removeToken } from '../utils/auth';
+import { removeToken, setToken } from '../utils/auth';
 
 // General API service mixed with specific authentication logic
 const api = {
+  constructor() {
+    this.token = "";
+  },
+
+  getToken() {
+    return this.token;
+  },
+
+  setToken(token) {
+    this.token = token;
+  },
+
   baseUrl: '/api',
+
+  
   
   // Makes a GET request to the API
-  async get(endpoint) {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`);
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('API GET error:', error);
-      alert('Failed to fetch data. Please try again.'); // UI logic in service layer
-      return null;
-    }
+  get(endpoint) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+          mode: "cors",
+          method: "GET",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+        });
+
+        const res = await response.json();
+        resolve(res);
+      } catch (e) {
+        reject(e);
+      }
+    });
   },
   
   // Makes a POST request to the API
   async post(endpoint, body) {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Something went wrong');
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+          mode: "cors",
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        });
+
+        const res = await response.json();
+        if (response.status !== 200) {
+          return reject(res);
+        }
+        resolve(res);
+      } catch (e) {
+        reject(e);
       }
-      
-      return data;
-    } catch (error) {
-      console.error('API POST error:', error);
-      return { error: error.message };
-    }
+    });
   },
   
   // Makes a PUT request to the API
   async put(endpoint, body) {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('API error:', data.message);
-        return { ok: false, data };
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+          mode: "cors",
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Authorization: `JWT ${this.token}` },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        });
+
+        const res = await response.json();
+        resolve(res);
+      } catch (e) {
+        reject(e);
       }
-      
-      return { ok: true, data };
-    } catch (error) {
-      console.error('API PUT error:', error);
-      return { ok: false, error: error.message };
-    }
-  }
+    });
+  },
 };
 
+const API = new api();
+export default API;
+
+
+
+
+// In controller Auth.js
 // User login - business logic mixed with authentication
 export const login = async (email, password) => {
   try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
+    const {data, ok} = await api.post('/api/auth/login', {
+      email,
+      password
     });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
-    }
+        
+    if (!ok) throw new Error(data.message || 'Login failed')
     
     // Store token in localStorage
     setToken(data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    
-    // UI-related logic in service
-    if (data.user.isAdmin) {
-      window.location.href = '/admin/dashboard';
-    } else {
-      window.location.href = '/dashboard';
-    }
-    
     return { success: true, user: data.user };
   } catch (error) {
     // UI alert in service method
-    alert(`Login failed: ${error.message}`);
     return { success: false, error: error.message };
   }
 };
 
 // User register
 export const register = async (userData) => {
-  const response = await api.post('/auth/register', userData);
+  const {data, ok} = await api.post('/auth/register', {userData});
   
-  if (response.error) {
-    alert(`Registration failed: ${response.error}`); // UI logic
-    return { success: false, error: response.error };
+  if (data.error) {
+    return { success: false, error: data.error };
   }
   
   // Automatically log the user in
   return await login(userData.email, userData.password);
-};
-
-// Get user profile
-export const getUserProfile = async () => {
-  const data = await api.get('/user/profile');
-  
-  if (!data) {
-    return null;
-  }
-  
-  return data;
-};
-
-// Update user profile
-export const updateUserProfile = async (profileData) => {
-  const result = await api.put('/user/profile', profileData);
-  
-  if (result.ok) {
-    // UI alert in service
-    alert('Profile updated successfully!');
-    
-    // Update stored user data
-    const currentUser = JSON.parse(localStorage.getItem('user'));
-    localStorage.setItem('user', JSON.stringify({
-      ...currentUser,
-      ...profileData
-    }));
-    
-    return { success: true, user: result.data };
-  } else {
-    alert(`Failed to update profile: ${result.error}`);
-    return { success: false, error: result.error };
-  }
 };
 
 // Logout user
@@ -176,7 +147,5 @@ export const logout = () => {
 export default {
   login,
   register,
-  getUserProfile,
-  updateUserProfile,
   logout
 };
