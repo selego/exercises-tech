@@ -22,9 +22,8 @@ const taskSchema = new mongoose.Schema({
     default: 'todo'
   },
   createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    user_id: String,
+    user_name : String,
   },
   assignedTo: {
     user_id: String,
@@ -73,9 +72,7 @@ router.post('/', async (req, res) => {
       ...req.body,
       createdBy: {
         user_id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar
+        user_name: user.name,
       }
     });
     
@@ -86,65 +83,43 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Assign task to user
 router.put('/:id', async (req, res) => {
   try {
-    const { user_id } = req.body;
     
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ error: 'TASK_NOT_FOUND' });
-    
-    const user = await User.findById(user_id);
-    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
-    
-    task.assignedTo = {
-      user_id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar
-    };
-    task.updatedAt = Date.now();
-    
+
+    if (user_id) {
+      const user = await User.findById(user_id);
+      if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+      task.assignedTo = {
+        user_id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar
+      };
+    }
+
+    if (text) {
+      const user = await User.findById(user_id); 
+      if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+
+      task.comments.push({
+        text,
+        user_id: user._id,
+        user_name: user.name,
+        user_avatar: user.avatar,
+      });
+    }
+
     await task.save();
-    return res.status(200).json({ ok: true, data: task  });
+    return res.status(200).json({ ok: true, data: task });
   } catch (error) {
     capture(error);
-    res.status(500).json({ error: 'FAILED_TO_ASSIGN_TASK' });
+    res.status(500).json({ error: 'FAILED_TO_UPDATE_TASK' });
   }
 });
 
-// Add a comment to a task
-// /comments est dans un query ducoup ?
-router.put('/:id', async (req, res) => {
-  try {
-    const {user_id} = req.body;
-
-    const task = await Task.findById(req.params.id);
-    if (!task) {
-      return res.status(404).send({ ok: false, code: "TASK_NOT_FOUND" });
-    }
-
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).send({ ok: false, code: "USER_NOT_FOUND" });
-    }
-
-    task.comments.push({
-      text : req.body.text,
-      user_id: user._id,
-      user_name: user.name,
-      user_avatar: user.avatar,
-      createdAt: Date.now()
-    });
-
-    task.updatedAt = Date.now();
-
-    await task.save();
-    return res.status(201).send({ ok: true, data: task });
-  } catch (error) {
-    capture(error); 
-    res.status(500).send({ ok: false, code: "FAILED_TO_ADD_COMMENT", error });
-  }
-});
 
 module.exports = router;

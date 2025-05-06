@@ -101,23 +101,12 @@ const Dashboard = () => {
   // Mark notification as read
   const markAsRead = async (notificationId) => {
     try {
-      const { data, ok } = await api.put(`/notifications/search`, {
-        id: notificationId,
+      const { data, ok } = await api.put(`/notifications/${notificationId}`, {
         read : true,
       });
       
       if (!ok) return toast.error("Failed to mark notification as read");
-      
-
       setNotifications(data);
-
-      // // Update notifications in state
-      // setNotifications(notifications.map(notification => 
-      //   notification.id === notificationId 
-      //     ? { ...notification, read: true } 
-      //     : notification
-      // ));
-
     } catch (err) {
       console.error('Failed to mark notification as read', err);
     }
