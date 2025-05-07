@@ -21,7 +21,7 @@
 // 3. Decoupling functionality to reduce change amplification
 // 4. Applying proper separation of concerns
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 
 const ProductSearch = ({ 
   initialQuery = '', 
@@ -44,39 +44,28 @@ const ProductSearch = ({
   const [sortBy, setSortBy] = useState('relevance');
   
   // Complex fetch function with unknown unknowns (no proper error handling)
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    
-    const params = new URLSearchParams();
-    params.append('q', query);
-    params.append('page', page);
-    params.append('sort', sortBy);
-    
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== '' && value !== false) params.append(key, value);
-    });
-    
+  const fetchProducts = async () => {
     try {
-      const response = await fetch(`/api/products/search?${params.toString()}`);
-      const data = await response.json();
-      setProducts(data.products || []);
+      setLoading(true);
+      const {data, ok} = await api.get(`/api/products/search`, {
+          q: query,
+          page: page,
+          sort: sortBy,
+          ...filters
+      });
+      if (!ok) return toast.error("Failed to fetch products");
+
+        setProducts(data.products);
+        setLoading(false);
     } catch (err) {
-      console.error('Search error:', err);
-    } finally {
       setLoading(false);
+      console.error('Search error:', err.err);
     }
-  }, [query, page, sortBy, filters]);
+  };
   
   // High cognitive load with complex memoization
-  const categorizedProducts = useMemo(() => {
-    return products.reduce((acc, product) => {
-      if (!acc[product.category]) {
-        acc[product.category] = [];
-      }
-      acc[product.category].push(product);
-      return acc;
-    }, {});
-  }, [products]);
+  // This should be in backend
+  
   
   // Effect with change amplification risk
   useEffect(() => {
@@ -86,28 +75,11 @@ const ProductSearch = ({
   }, [fetchProducts, query]);
   
   // Local storage effect causing change amplification
-  useEffect(() => {
-    if (saveSearchState) {
-      localStorage.setItem('lastSearchQuery', query);
-      localStorage.setItem('lastSearchFilters', JSON.stringify(filters));
-    }
-    return () => {
-      if (saveSearchState) {
-        localStorage.removeItem('lastSearchQuery');
-        localStorage.removeItem('lastSearchFilters');
-      }
-    };
-  }, [query, filters, saveSearchState]);
+  // Bad habit to use local storage for this
+  
 
   // Complex handler with conditional logic
-  const handleFilterChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFilters(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    setPage(1); // Reset page when filters change
-  };
+  // Directly in the onChange 
 
   return (
     <div className="container mx-auto p-4">
@@ -126,7 +98,7 @@ const ProductSearch = ({
           <select 
             name="category"
             value={filters.category}
-            onChange={handleFilterChange}
+            onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Categories</option>
@@ -139,7 +111,7 @@ const ProductSearch = ({
             type="number" 
             name="minPrice"
             value={filters.minPrice}
-            onChange={handleFilterChange}
+            onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
             placeholder="Min Price" 
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -148,7 +120,7 @@ const ProductSearch = ({
             type="number" 
             name="maxPrice"
             value={filters.maxPrice}
-            onChange={handleFilterChange}
+            onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
             placeholder="Max Price" 
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -159,7 +131,7 @@ const ProductSearch = ({
               id="inStock"
               name="inStock"
               checked={filters.inStock}
-              onChange={handleFilterChange}
+              onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
               className="mr-2 h-5 w-5 text-blue-600" 
             />
             <label htmlFor="inStock" className="text-gray-700">In Stock Only</label>
@@ -174,58 +146,18 @@ const ProductSearch = ({
           className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {sortOptions.map(option => (
-            <option key={option} value={option}>
-              {option === 'relevance' ? 'Relevance' : 
-               option === 'price-low' ? 'Price: Low to High' : 
-               option === 'price-high' ? 'Price: High to Low' : option}
-            </option>
+            <SortOption key={option} option={option} />
           ))}
         </select>
       </div>
       
-      {loading ? (
-        <div className="flex justify-center items-center h-40">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : error ? (
-        <div className="text-red-500 text-center py-4">{error}</div>
-      ) : (
-        <div>
-          {Object.entries(categorizedProducts).map(([category, categoryProducts]) => (
-            <div key={category} className="mb-8">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">{category}</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {categoryProducts.map(product => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow">
-                    <img src={product.image} alt={product.name} className="w-full h-48 object-cover" />
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold mb-2 text-gray-800">{product.name}</h3>
-                      <p className="text-gray-600 mb-2">${product.price.toFixed(2)}</p>
-                      {showRatings && (
-                        <div className="flex mb-2">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <svg 
-                              key={i} 
-                              className={`w-5 h-5 ${i < product.rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                              fill="currentColor" 
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          ))}
-                        </div>
-                      )}
-                      <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md w-full transition-colors">
-                        Add to Cart
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      
+      <ProductList 
+        categorizedProducts={categorizedProducts}
+        showRatings={showRatings}
+        loading={loading}
+        error={error} 
+      />
       
       <div className="flex justify-center mt-8">
         <button 
@@ -250,3 +182,68 @@ const ProductSearch = ({
 };
 
 export default ProductSearch;
+
+
+
+const SortOption = ({ option }) => {
+  let label = option; // Default to the option value itself
+  if (option === 'relevance') label = 'Relevance'
+  if (option === 'price-low') label = 'Price: Low to High'
+  if (option === 'price-high') label = 'Price: High to Low';
+  return <option value={option}>{label}</option>;
+};
+
+
+const ProductList = ({ categorizedProducts, showRatings, loading, error }) => {
+
+  if (loading){
+    return (
+    <div className="flex justify-center items-center h-40">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  )}
+  
+  if (error) {
+    return (
+    <div className="text-red-500 text-center py-4">{error}</div>
+  ) }
+
+  return (
+    <div>
+      {Object.entries(categorizedProducts).map(([category, categoryProducts]) => (
+        <div key={category} className="mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">{category}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {categoryProducts.map(product => (
+              <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow">
+                <img src={product.image} alt={product.name} className="w-full h-48 object-cover" />
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">{product.name}</h3>
+                  <p className="text-gray-600 mb-2">${product.price.toFixed(2)}</p>
+                  {showRatings && (
+                    <div className="flex mb-2">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <svg 
+                          key={i} 
+                          className={`w-5 h-5 ${i < product.rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                          fill="currentColor" 
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                  )}
+                  <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md w-full transition-colors">
+                    Add to Cart
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  
