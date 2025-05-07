@@ -21,7 +21,7 @@
 // 3. Decoupling functionality to reduce change amplification
 // 4. Applying proper separation of concerns
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 const ProductSearch = ({ 
   initialQuery = '', 
@@ -64,11 +64,7 @@ const ProductSearch = ({
   };
   
   // High cognitive load with complex memoization
-  const categorizedProducts = products.reduce((acc, product) => {
-    acc[product.category] = acc[product.category] || [];
-    acc[product.category].push(product);
-    return acc;
-  }, {});
+  // This should be in backend
   
   
   // Effect with change amplification risk
@@ -79,40 +75,11 @@ const ProductSearch = ({
   }, [fetchProducts, query]);
   
   // Local storage effect causing change amplification
-
-  const debouncedSaveSearchState = debounce(() => {
-    if (saveSearchState) {
-      localStorage.setItem('lastSearchQuery', query);
-      localStorage.setItem('lastSearchFilters', JSON.stringify(filters));
-    }
-  }, 1000);
-
-
-  useEffect(() => {
-    debouncedSaveSearchState();
-    return () => debouncedSaveSearchState.cancel();
-  }, [query, filters]); 
-
-  useEffect(() => {
-    return () => {
-      if (saveSearchState) {
-        localStorage.removeItem('lastSearchQuery');
-        localStorage.removeItem('lastSearchFilters');
-      }
-    };
-  }, [saveSearchState]);
+  // Bad habit to use local storage for this
+  
 
   // Complex handler with conditional logic
-  const handleFilterChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
-
-    setFilters(prev => ({
-      ...prev,
-      [name]: newValue,
-    }));
-    setPage(1); // Reset page when filters change
-  };
+  // Directly in the onChange 
 
   return (
     <div className="container mx-auto p-4">
@@ -131,7 +98,7 @@ const ProductSearch = ({
           <select 
             name="category"
             value={filters.category}
-            onChange={handleFilterChange}
+            onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Categories</option>
@@ -144,7 +111,7 @@ const ProductSearch = ({
             type="number" 
             name="minPrice"
             value={filters.minPrice}
-            onChange={handleFilterChange}
+            onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
             placeholder="Min Price" 
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -153,7 +120,7 @@ const ProductSearch = ({
             type="number" 
             name="maxPrice"
             value={filters.maxPrice}
-            onChange={handleFilterChange}
+            onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
             placeholder="Max Price" 
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -164,7 +131,7 @@ const ProductSearch = ({
               id="inStock"
               name="inStock"
               checked={filters.inStock}
-              onChange={handleFilterChange}
+              onChange={e => { setFilters(prev => ({ ...prev, inStock: e.target.checked })); setPage(1); }}
               className="mr-2 h-5 w-5 text-blue-600" 
             />
             <label htmlFor="inStock" className="text-gray-700">In Stock Only</label>
